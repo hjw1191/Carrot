@@ -1,6 +1,6 @@
 import "./Main.css";
-import { ModalPosting } from "../components/Modal_Posting";
 import { ModalEditor } from "../components/Modal_Editor";
+import { ModalPosting } from "../components/Modal_Posting";  // 새로 추가
 import { useState, useEffect } from "react";
 
 export function Main() {
@@ -10,6 +10,7 @@ export function Main() {
   const [isWriteModalOpen, setIsWriteModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedTrip, setSelectedTrip] = useState(null);
+  const [isPostingModalOpen, setIsPostingModalOpen] = useState(false);  // 새로 추가
 
   useEffect(() => {
     // 초기 데이터 설정
@@ -59,7 +60,7 @@ export function Main() {
       {
         type: "운전자",
         route: "광 → 대구",
-        time: "오후 4:00 출발",
+        time: "오후 4:00 발",
         date: "2024-09-03",
         gender: "성별무관"
       },
@@ -126,11 +127,13 @@ export function Main() {
   };
 
   const handleEdit = (editedTrip) => {
+    console.log("Edited trip:", editedTrip);  // 로그 추가
     const updatedTrips = trips.map((trip) =>
       trip === selectedTrip ? editedTrip : trip
     );
     setTrips(updatedTrips);
     setFilteredTrips(updatedTrips);
+    setIsEditModalOpen(false);
   };
 
   const handleDelete = (tripToDelete) => {
@@ -140,6 +143,7 @@ export function Main() {
   };
 
   const handleEditClick = (trip) => {
+    console.log("Selected trip:", trip);  // 로그 추가
     setSelectedTrip(trip);
     setIsEditModalOpen(true);
   };
@@ -147,6 +151,12 @@ export function Main() {
   const handleCloseEditModal = () => {
     setIsEditModalOpen(false);
     setSelectedTrip(null);
+  };
+
+  const handlePostSubmit = (newTrip) => {
+    setTrips([newTrip, ...trips]);
+    setFilteredTrips([newTrip, ...filteredTrips]);
+    setIsPostingModalOpen(false);
   };
 
   return (
@@ -207,7 +217,7 @@ export function Main() {
             </div>
           </div>
           <button
-            onClick={() => setIsWriteModalOpen(true)}
+            onClick={() => setIsPostingModalOpen(true)}
             className="btn_write"
           >
             카풀 요청하기
@@ -249,13 +259,13 @@ export function Main() {
         </section>
       </div>
       <ModalPosting
-        isOpen={isWriteModalOpen}
-        onClose={() => setIsWriteModalOpen(false)}
-        onSubmit={handleWriteSubmit}
+        isOpen={isPostingModalOpen}
+        onClose={() => setIsPostingModalOpen(false)}
+        onSubmit={handlePostSubmit}
       />
       <ModalEditor
         isOpen={isEditModalOpen}
-        onClose={handleCloseEditModal}
+        onClose={() => setIsEditModalOpen(false)}
         editData={selectedTrip}
         onEdit={handleEdit}
         onDelete={handleDelete}

@@ -139,20 +139,25 @@ const KakaoMap = ({ onMapSubmit, editData }) => {
       .catch(error => console.error('경로 가져오기 실패:', error));
   }, [map, polyline]);
 
+  const addCommas = (num) => {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  };
+
   const calculateCosts = useCallback((distance) => {
     const distanceKm = distance / 1000;
     const fuelPrice = 1800;
     const fuelEfficiency = 10;
     const fuelCost = (distanceKm / fuelEfficiency) * fuelPrice;
-    setFuelCost(`기름값: 약 ${fuelCost.toFixed(0)}원`);
+    setFuelCost(`기름값: 약 ${addCommas(Math.round(fuelCost))}원`);
 
     const baseFare = 4000;
     const per100mFare = 132;
     const taxiCost = baseFare + (distance / 100 * per100mFare);
-    setTaxiCost(`택시비: 약 ${taxiCost.toFixed(0)}원`);
+    setTaxiCost(`택시비: 약 ${addCommas(Math.round(taxiCost))}원`);
   }, []);
 
   const handleSubmit = useCallback((event) => {
+    
     event.preventDefault();
     const start = startName.trim();
     const end = endName.trim();
