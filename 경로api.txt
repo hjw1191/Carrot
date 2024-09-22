@@ -1,0 +1,195 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head><script type="text/javascript" src="/___vscode_livepreview_injected_script"></script>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>카카오 맵 경로 찾기 및 비용 계산</title>
+    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=c2828d7dee20f4b50bd4e887a055a84b&libraries=services"></script>
+    <style>
+        #map {
+            width: 100%;
+            height: 500px;
+            margin-top: 10px;
+        }
+        #costs {
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <h1>출발지와 도착지 검색 및 경로 표시</h1>
+    <form id="searchForm">
+        <input type="text" id="startName" placeholder="출발지 이름을 입력하세요" required>
+        <input type="text" id="endName" placeholder="도착지 이름을 입력하세요" required>
+        <button type="submit">검색</button>
+    </form>
+
+    <div id="map"></div>
+    <div id="costs">
+        <h2>비용 계산 결과</h2>
+        <p id="fuelCost">기름값: 계산 중...</p>
+        <p id="taxiCost">택시비: 계산 중...</p>
+    </div>
+
+    <script>
+        var map, startMarker, endMarker, polyline;
+        var distance = 0;
+
+        // 지도 초기화 함수
+        function initMap() {
+            var mapContainer = document.getElementById('map');
+            var mapOption = {
+                center: new kakao.maps.LatLng(37.5665, 126.9780), // 서울 시청 기준
+                level: 3
+            };
+
+            // 지도를 생성합니다
+            map = new kakao.maps.Map(mapContainer, mapOption);
+        }
+
+        // 장소 검색 및 마커 표시 함수
+        function searchPlaceByName(placeName, markerType, callback) {
+            var ps = new kakao.maps.services.Places();
+
+            // 장소 검색 객체를 통해 장소 검색을 요청합니다
+            ps.keywordSearch(placeName, function(data, status) {
+                if (status === kakao.maps.services.Status.OK) {
+                    var place = data[0]; // 첫 번째 검색 결과 사용
+                    var coords = new kakao.maps.LatLng(place.y, place.x);
+
+                    // 지도 중심을 검색된 위치로 이동
+                    map.setCenter(coords);
+
+                    // 마커 설정
+                    setMarker(coords, markerType);
+
+                    // 콜백 함수 실행
+                    if (callback) callback(coords);
+                } else {
+                    alert(`${placeName}을(를) 찾을 수 없습니다. 다른 이름을 시도해 보세요.`);
+                }
+            });
+        }
+
+        // 마커를 지도에 추가하는 함수
+        function setMarker(coords, type) {
+            // 기존 마커 제거
+            if (type === 'S' && startMarker) {
+                startMarker.setMap(null);
+            } else if (type === 'E' && endMarker) {
+                endMarker.setMap(null);
+            }
+
+            // 마커 설정
+            var marker = new kakao.maps.Marker({
+                position: coords,
+                map: map,
+                title: type,
+                image: new kakao.maps.MarkerImage(
+                    `https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png`, 
+                    new kakao.maps.Size(24, 35)
+                )
+            });
+
+            // 마커 타입에 따라 마커 저장
+            if (type === 'S') {
+                startMarker = marker;
+                startMarker.setTitle('S');
+            } else if (type === 'E') {
+                endMarker = marker;
+                endMarker.setTitle('E');
+            }
+        }
+
+        // 경로를 그리고 지도에 표시하는 함수
+        function drawRoute(startCoords, endCoords) {
+            // 기존 경로 제거
+            if (polyline) {
+                polyline.setMap(null);
+            }
+
+            // 티맵 경로 검색 API 사용
+            var tmapKey = 'wqfQUHgfrF9iw5X1Csutj9uNrAyZqVmU5xZbXapt'; // 여기에 Tmap API 키를 입력하세요
+            var tmapUrl = `https://apis.openapi.sk.com/tmap/routes?version=1&format=json&startX=${startCoords.getLng()}&startY=${startCoords.getLat()}&endX=${endCoords.getLng()}&endY=${endCoords.getLat()}&appKey=${tmapKey}`;
+
+            fetch(tmapUrl)
+                .then(response => response.json())
+                .then(data => {
+                    var path = [];
+                    distance = 0; // 거리 초기화
+                    if (data.features && data.features.length > 0) {
+                        data.features.forEach(feature => {
+                            if (feature.geometry.type === "LineString") {
+                                feature.geometry.coordinates.forEach(coord => {
+                                    path.push(new kakao.maps.LatLng(coord[1], coord[0]));
+                                });
+                            }
+                            if (feature.properties && feature.properties.distance) {
+                                distance += feature.properties.distance;
+                            }
+                        });
+
+                        // 폴리라인을 생성하여 지도에 표시
+                        polyline = new kakao.maps.Polyline({
+                            path: path,
+                            strokeWeight: 5,
+                            strokeColor: '#FF0000',
+                            strokeOpacity: 0.8,
+                            strokeStyle: 'solid'
+                        });
+                        polyline.setMap(map);
+
+                        // 비용 계산
+                        calculateCosts(distance);
+                    } else {
+                        alert('경로를 찾을 수 없습니다.');
+                    }
+                })
+                .catch(error => console.error('경로 가져오기 실패:', error));
+        }
+
+        // 비용 계산 함수
+        function calculateCosts(distance) {
+            // 거리(km)로 변환
+            var distanceKm = distance / 1000;
+
+            // 기름값 계산
+            var fuelPrice = 1800; // 현재 휘발유 가격 (원/L)
+            var fuelEfficiency = 10; // 차량 연비 (km/L)
+            var fuelCost = (distanceKm / fuelEfficiency) * fuelPrice;
+            document.getElementById('fuelCost').textContent = `기름값: 약 ${fuelCost.toFixed(0)}원`;
+
+            // 택시비 계산
+            var baseFare = 4000; // 기본 요금 (원)
+            var per100mFare = 132; // 100m당 요금 (원)
+            var taxiCost = baseFare + (distance / 100 * per100mFare);
+            document.getElementById('taxiCost').textContent = `택시비: 약 ${taxiCost.toFixed(0)}원`;
+        }
+
+        // 폼 제출 이벤트 핸들러
+        document.getElementById('searchForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            var startName = document.getElementById('startName').value.trim();
+            var endName = document.getElementById('endName').value.trim();
+
+            if (!startName || !endName) {
+                alert('출발지와 도착지 이름을 모두 입력해 주세요.');
+                return;
+            }
+
+            // 출발지와 도착지 이름으로 각각 검색 후 경로 그리기
+            searchPlaceByName(startName, 'S', function(startCoords) {
+                searchPlaceByName(endName, 'E', function(endCoords) {
+                    drawRoute(startCoords, endCoords);
+                });
+            });
+        });
+
+        // 지도 초기화
+        initMap();
+    </script>
+</body>
+</html>
